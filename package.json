@@ -1,18 +1,46 @@
 {
-  "name": "server_test",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "react-native-pocket-server",
+  "version": "0.1.0",
+  "description": "Tiny Express-style HTTP server that runs inside your React Native app — routing, middleware, routers, CORS and file serving over TCP. Zero runtime dependencies.",
+  "main": "src/index.js",
+  "types": "index.d.ts",
+  "type": "module",
+  "files": [
+    "src",
+    "index.d.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "test": "node --test"
   },
-  "dependencies": {
-    "expo": "~54.0.33",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+  "keywords": [
+    "react-native",
+    "expo",
+    "http",
+    "server",
+    "http-server",
+    "web-server",
+    "express",
+    "rest",
+    "api",
+    "tcp",
+    "router",
+    "middleware",
+    "local-server",
+    "lan"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rochardEloi/react-native-pocket-server.git"
   },
-  "private": true
+  "author": "Eloi Rochard Eliamar",
+  "license": "MIT",
+  "peerDependencies": {
+    "react-native-tcp-socket": ">=6.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

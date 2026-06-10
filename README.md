@@ -142,24 +142,130 @@ await res.download(file, name)   // sendFile with Content-Disposition: attachmen
 
 ### Middleware
 
-Works like Express — call `next()` to continue, send a response to stop the chain, `next(err)` or `throw` to reach the error handler. Async handlers are fully supported.
+Works like Express — call `next()` to continue, send a response to stop the chain, `next(err)` or `throw` to reach the error handler. Async middleware is fully supported. Execution order: global middleware first (in registration order), then the route's own middleware, then the handler.
+
+#### Three ways to attach middleware
 
 ```js
-// Global
-app.use((req, res, next) => { console.log(req.path); next(); });
-
-// Limited to a path prefix
-app.use('/admin', (req, res, next) => { ...; next(); });
-
-// Per-route (run before the handler)
-function auth(req, res, next) {
-  if (req.headers['authorization'] !== 'Bearer secret') {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  req.user = { name: 'Jane' };
+// 1. Global — runs for every request
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} from ${req.ip}`);
   next();
-}
+});
+
+// 2. Path prefix — runs for /admin and everything under /admin/
+app.use('/admin', (req, res, next) => {
+  res.header('Cache-Control', 'no-store');
+  next();
+});
+
+// 3. Per-route — listed before the handler, left to right
 app.get('/private', auth, (req, res) => res.json({ user: req.user }));
+app.get('/admin/stats', auth, role('admin'), (req, res) => res.json({ ... }));
+```
+
+#### Authentication
+
+Attach what you learn to `req` — everything later in the chain can read it:
+
+```js
+function auth(req, res, next) {
+  const token = req.headers['authorization']?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  const user = lookupToken(token); // your own logic
+  if (!user) return res.status(401).json({ error: 'Invalid token' });
+
+  req.user = user;
+  next(); // continue to the handler
+}
+
+app.get('/profile', auth, (req, res) => res.json({ user: req.user }));
+```
+
+#### Middleware factories
+
+A function that *returns* middleware, so it can be configured per route:
+
+```js
+function role(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Forbidden: insufficient role' });
+    }
+    next();
+  };
+}
+
+app.get('/admin', auth, role('admin'), handler);
+app.get('/reports', auth, role('admin', 'manager'), handler);
+```
+
+#### Body validation
+
+```js
+function requireFields(...fields) {
+  return (req, res, next) => {
+    if (!req.json) return res.status(400).json({ error: 'JSON body required' });
+    const missing = fields.filter((f) => req.json[f] === undefined);
+    if (missing.length) {
+      return res.status(422).json({ error: `Missing fields: ${missing.join(', ')}` });
+    }
+    next();
+  };
+}
+
+app.post('/users', requireFields('name', 'email'), (req, res) => {
+  res.status(201).json({ created: req.json.name });
+});
+```
+
+#### Rate limiting
+
+A simple in-memory limiter using `req.ip`:
+
+```js
+function rateLimit({ windowMs = 60000, max = 30 } = {}) {
+  const hits = new Map(); // ip -> recent request timestamps
+  return (req, res, next) => {
+    const now = Date.now();
+    const recent = (hits.get(req.ip) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+    recent.push(now);
+    hits.set(req.ip, recent);
+    next();
+  };
+}
+
+app.use(rateLimit({ windowMs: 60000, max: 30 }));
+```
+
+#### Async middleware and error flow
+
+```js
+// Async middleware works out of the box — just await inside it
+app.get(
+  '/data/:id',
+  async (req, res, next) => {
+    req.record = await loadRecord(req.params.id); // your own logic
+    if (!req.record) return res.status(404).json({ error: 'Not found' });
+    next();
+  },
+  (req, res) => res.json(req.record)
+);
+
+// Throwing (or calling next(err)) skips the rest of the chain
+// and goes straight to the error handler
+app.get('/risky', (req, res) => {
+  throw new Error('something broke');
+});
+
+app.error((err, req, res) => {
+  res.status(500).json({ error: err.message });
+});
 ```
 
 ### Routers

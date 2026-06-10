@@ -16,6 +16,9 @@ app.listen(8080);
 
 Any device on the same network can now `curl http://<phone-ip>:8080/`.
 
+> [!NOTE]
+> In a real app, start the server inside a `useEffect` and close it on unmount — see [Quick start](#quick-start). Pasting server code directly into a component body will try to restart it on every re-render.
+
 ## Why?
 
 There was no maintained, batteries-included way to run an HTTP server with an Express-like API inside React Native. Use cases:
@@ -38,37 +41,54 @@ npm install react-native-pocket-server react-native-tcp-socket
 
 ## Quick start
 
-```js
-import createServer, { Router, cors } from 'react-native-pocket-server';
+The server lives inside your app, so tie it to the React lifecycle: **create and start it in a `useEffect` with an empty dependency array**, and close it in the cleanup function. Don't create it in the component body — that would try to start a new server on every re-render, and the port would already be in use.
 
-const app = createServer();
-
-// Global middleware
-app.use(cors());
-
-// Routes
-app.get('/ping', (req, res) => res.json({ pong: true }));
-
-// Route params + query: GET /users/42?verbose=1
-app.get('/users/:id', (req, res) => {
-  res.json({ id: req.params.id, verbose: req.query.verbose });
-});
-
-// JSON body: POST /echo  {"msg":"hi"}
-app.post('/echo', (req, res) => res.json({ youSent: req.json }));
-
-app.listen(8080, () => console.log('listening'));
-
-// Later (e.g. component unmount):
-app.close();
-```
-
-Show the user the server's address with [`expo-network`](https://docs.expo.dev/versions/latest/sdk/network/):
-
-```js
+```jsx
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 import * as Network from 'expo-network';
-const ip = await Network.getIpAddressAsync(); // e.g. 192.168.1.42
+import createServer, { cors } from 'react-native-pocket-server';
+
+const PORT = 8080;
+
+export default function App() {
+  const [ip, setIp] = useState(null);
+
+  useEffect(() => {
+    // Show the phone's address so other devices know where to connect
+    Network.getIpAddressAsync().then(setIp);
+
+    const app = createServer();
+
+    // Global middleware
+    app.use(cors());
+
+    // Routes
+    app.get('/ping', (req, res) => res.json({ pong: true }));
+
+    // Route params + query: GET /users/42?verbose=1
+    app.get('/users/:id', (req, res) => {
+      res.json({ id: req.params.id, verbose: req.query.verbose });
+    });
+
+    // JSON body: POST /echo  {"msg":"hi"}
+    app.post('/echo', (req, res) => res.json({ youSent: req.json }));
+
+    app.listen(PORT);
+
+    // Stop the server when the component unmounts
+    return () => app.close();
+  }, []); // empty deps = start once on mount
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>Server running at http://{ip ?? '...'}:{PORT}</Text>
+    </View>
+  );
+}
 ```
+
+The snippets in the API reference below show only the route definitions — they all belong inside that `useEffect`.
 
 ## API
 

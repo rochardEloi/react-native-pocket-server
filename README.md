@@ -258,7 +258,7 @@ You are opening a port on the user's device — treat everything that arrives as
 - One request per connection (`Connection: close`) — no keep-alive, no HTTP/2.
 - Files are read fully into memory to be sent — fine for icons, documents and photos; not meant for multi-GB video streaming.
 
-## Example app
+## Example app 
 
 A full Expo example with auth middleware, role checks, file upload/download and a live request log lives in [`example/`](example):
 
